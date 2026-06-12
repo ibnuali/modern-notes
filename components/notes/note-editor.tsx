@@ -37,6 +37,7 @@ export function NoteEditor({ initialNotes }: NoteEditorProps) {
   const [searchResults, setSearchResults] = useState<Note[] | null>(null);
   const [searching, setSearching] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchAbortRef = useRef<AbortController | null>(null);
 
   const visibleNotes = searchResults ?? notes;
 
@@ -73,11 +74,13 @@ export function NoteEditor({ initialNotes }: NoteEditorProps) {
     return () => window.removeEventListener('beforeunload', warn);
   }, [isDirty]);
 
-  // Debounced search
+  // Debounced search with abort + unmount guard
   useEffect(() => {
     if (searchTimer.current) {
       clearTimeout(searchTimer.current);
     }
+
+    searchAbortRef.current?.abort();
 
     const trimmed = searchQuery.trim();
 
@@ -89,27 +92,40 @@ export function NoteEditor({ initialNotes }: NoteEditorProps) {
 
     setSearching(true);
 
+    let ignore = false;
+
     searchTimer.current = setTimeout(async () => {
+      const ac = new AbortController();
+      searchAbortRef.current = ac;
+
       try {
-        const response = await fetch(`/api/notes/search?q=${encodeURIComponent(trimmed)}`);
+        const response = await fetch(`/api/notes/search?q=${encodeURIComponent(trimmed)}`, {
+          signal: ac.signal,
+        });
         const data = await response.json().catch(() => null);
+
+        if (ignore) return;
 
         if (!response.ok || !data?.notes) {
           setSearchResults([]);
         } else {
           setSearchResults(data.notes as Note[]);
         }
-      } catch {
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        if (ignore) return;
         setSearchResults([]);
       } finally {
-        setSearching(false);
+        if (!ignore) setSearching(false);
       }
     }, 300);
 
     return () => {
+      searchAbortRef.current?.abort();
       if (searchTimer.current) {
         clearTimeout(searchTimer.current);
       }
+      ignore = true;
     };
   }, [searchQuery]);
 
