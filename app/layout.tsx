@@ -14,7 +14,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en">
       <body>
-        <header className="site-header">
+        <a href="#main-content" className="skip-link">
+          Skip to content
+        </a>
+        <header className="site-header" role="banner">
           <Link href="/" className="brand">Notes</Link>
           <nav aria-label="Main navigation">
             {user ? (
@@ -32,7 +35,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             )}
           </nav>
         </header>
-        <main>{children}</main>
+        <main id="main-content">{children}</main>
       </body>
     </html>
   );

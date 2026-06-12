@@ -2,12 +2,13 @@
   color-scheme: light dark;
   --background: #f8fafc;
   --foreground: #0f172a;
-  --muted: #475569;
-  --border: #cbd5e1;
+  --muted: #334155;
+  --border: #94a3b8;
   --card: #ffffff;
   --accent: #2563eb;
   --accent-foreground: #ffffff;
   --error: #b91c1c;
+  --success: #15803d;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -20,6 +21,7 @@
     --accent: #60a5fa;
     --accent-foreground: #020617;
     --error: #fca5a5;
+    --success: #4ade80;
   }
 }
 
@@ -67,9 +69,27 @@ button:disabled {
 
 button:focus-visible,
 a:focus-visible,
-input:focus-visible {
+input:focus-visible,
+textarea:focus-visible,
+.note-list-item:focus-visible,
+.secondary-button:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 3px;
+}
+
+/* Skip-to-content — visible on focus */
+.skip-link {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  font-weight: 700;
+  left: 1rem;
+  padding: 0.5rem 1rem;
+  position: absolute;
+  top: -100%;
+  z-index: 100;
+}
+.skip-link:focus {
+  top: 0.75rem;
 }
 
 main {
@@ -86,17 +106,25 @@ main {
   padding: 1rem clamp(1rem, 5vw, 3rem);
 }
 
+.actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
 .brand {
   font-size: 1.25rem;
   font-weight: 800;
   text-decoration: none;
 }
 
-.site-header nav,
-.actions {
+.site-header nav {
   align-items: center;
   display: flex;
-  gap: 1rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-end;
 }
 
 .site-header form {
@@ -299,7 +327,7 @@ main {
 }
 
 .save-state.saved {
-  color: #15803d;
+  color: var(--success);
 }
 
 .dirty-indicator {
@@ -351,5 +379,14 @@ main {
     border-right: 0;
     border-bottom: 1px solid var(--border);
     padding: 0 0 1rem;
+  }
+
+  .note-list-item,
+  .secondary-button {
+    min-height: 44px;
+  }
+
+  .note-list-item {
+    padding: 0.75rem 0.85rem;
   }
 }
