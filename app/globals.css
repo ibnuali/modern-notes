@@ -180,6 +180,47 @@ main {
   padding-right: 1rem;
 }
 
+.notes-list-controls {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.search-wrapper {
+  display: flex;
+  gap: 0.5rem;
+  position: relative;
+}
+
+.search-input {
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--foreground);
+  flex: 1;
+  padding: 0.5rem 1rem;
+  width: 100%;
+}
+
+.search-input::placeholder {
+  color: var(--muted);
+}
+
+.search-spinner {
+  align-self: center;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  border-top-color: var(--accent);
+  height: 1rem;
+  width: 1rem;
+  animation: spin 0.5s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .notes-list ul {
   display: grid;
   gap: 0.75rem;

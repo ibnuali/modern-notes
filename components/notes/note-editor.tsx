@@ -33,10 +33,18 @@ export function NoteEditor({ initialNotes }: NoteEditorProps) {
   const router = useRouter();
   const [notes, setNotes] = useState(initialNotes);
   const [selectedId, setSelectedId] = useState(initialNotes[0]?.id ?? 'new');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Note[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const visibleNotes = searchResults ?? notes;
+
   const selectedNote = useMemo(
-    () => notes.find((note) => note.id === selectedId) ?? null,
-    [notes, selectedId],
+    () => visibleNotes.find((note) => note.id === selectedId) ?? null,
+    [visibleNotes, selectedId],
   );
+
   const [title, setTitle] = useState(selectedNote?.title ?? '');
   const [body, setBody] = useState(selectedNote?.body ?? '');
   const [saveState, setSaveState] = useState<SaveState>('idle');
@@ -64,6 +72,46 @@ export function NoteEditor({ initialNotes }: NoteEditorProps) {
     }
     return () => window.removeEventListener('beforeunload', warn);
   }, [isDirty]);
+
+  // Debounced search
+  useEffect(() => {
+    if (searchTimer.current) {
+      clearTimeout(searchTimer.current);
+    }
+
+    const trimmed = searchQuery.trim();
+
+    if (!trimmed) {
+      setSearchResults(null);
+      setSearching(false);
+      return;
+    }
+
+    setSearching(true);
+
+    searchTimer.current = setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/notes/search?q=${encodeURIComponent(trimmed)}`);
+        const data = await response.json().catch(() => null);
+
+        if (!response.ok || !data?.notes) {
+          setSearchResults([]);
+        } else {
+          setSearchResults(data.notes as Note[]);
+        }
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+
+    return () => {
+      if (searchTimer.current) {
+        clearTimeout(searchTimer.current);
+      }
+    };
+  }, [searchQuery]);
 
   function commitDiscard() {
     if (!pendingDiscardTarget) return;
@@ -137,6 +185,9 @@ export function NoteEditor({ initialNotes }: NoteEditorProps) {
       setSelectedId(data.note.id);
       setSaveState('saved');
       setMessage(`Saved ${formatSavedAt(data.note.updatedAt)}`);
+      // Clear search after save
+      setSearchQuery('');
+      setSearchResults(null);
       router.refresh();
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
@@ -152,18 +203,38 @@ export function NoteEditor({ initialNotes }: NoteEditorProps) {
   return (
     <div className="notes-grid">
       <aside className="notes-list" aria-label="Saved notes">
-        <button type="button" onClick={startNewNote} className="secondary-button">
-          New note
-        </button>
+        <div className="notes-list-controls">
+          <button type="button" onClick={startNewNote} className="secondary-button">
+            New note
+          </button>
+          <div className="search-wrapper">
+            <input
+              type="search"
+              placeholder="Search notes…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Search notes by title or body"
+              className="search-input"
+            />
+            {searching && <span className="search-spinner" aria-label="Searching" />}
+          </div>
+        </div>
+
         {notes.length === 0 ? (
           <div className="empty-state">
             <p className="empty-state-text">
               No notes yet — create your first note to get started.
             </p>
           </div>
+        ) : visibleNotes.length === 0 ? (
+          <div className="empty-state">
+            <p className="empty-state-text">
+              No notes match <strong>{searchQuery}</strong>.
+            </p>
+          </div>
         ) : (
           <ul>
-            {notes.map((note) => (
+            {visibleNotes.map((note) => (
               <li key={note.id}>
                 <button
                   type="button"
