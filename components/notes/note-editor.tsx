@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 type Note = {
@@ -24,6 +24,11 @@ function formatSavedAt(value: string | Date) {
   }).format(new Date(value));
 }
 
+function editorStateMatchesNote(title: string, body: string, note: Note | null): boolean {
+  if (!note) return title === '' && body === '';
+  return title === note.title && body === note.body;
+}
+
 export function NoteEditor({ initialNotes }: NoteEditorProps) {
   const router = useRouter();
   const [notes, setNotes] = useState(initialNotes);
@@ -36,7 +41,59 @@ export function NoteEditor({ initialNotes }: NoteEditorProps) {
   const [body, setBody] = useState(selectedNote?.body ?? '');
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [message, setMessage] = useState('Unsaved note');
+  const [pendingDiscardTarget, setPendingDiscardTarget] = useState<string | null>(null);
 
+  const isDirty = useMemo(
+    () => !editorStateMatchesNote(title, body, selectedNote),
+    [title, body, selectedNote],
+  );
+
+  const latestSaveAbort = useRef<AbortController | null>(null);
+
+  // Confirm on external navigation when dirty
+  useEffect(() => {
+    function warn(e: BeforeUnloadEvent) {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    }
+
+    if (isDirty) {
+      window.addEventListener('beforeunload', warn);
+    }
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [isDirty]);
+
+  function commitDiscard() {
+    if (!pendingDiscardTarget) return;
+    const target = pendingDiscardTarget;
+    setPendingDiscardTarget(null);
+    setSelectedId(target);
+  }
+
+  const trySelectNote = useCallback(
+    (id: string) => {
+      if (id === selectedId) return;
+
+      if (isDirty) {
+        setPendingDiscardTarget(id);
+      } else {
+        setSelectedId(id);
+      }
+    },
+    [isDirty, selectedId],
+  );
+
+  function confirmDiscard() {
+    commitDiscard();
+  }
+
+  function cancelDiscard() {
+    setPendingDiscardTarget(null);
+  }
+
+  // Sync editor state when switching notes (triggered by selectedNote change)
   useEffect(() => {
     setTitle(selectedNote?.title ?? '');
     setBody(selectedNote?.body ?? '');
@@ -46,6 +103,10 @@ export function NoteEditor({ initialNotes }: NoteEditorProps) {
 
   async function saveNote(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    latestSaveAbort.current?.abort();
+    const ac = new AbortController();
+    latestSaveAbort.current = ac;
+
     setSaveState('saving');
     setMessage('Saving…');
 
@@ -54,11 +115,14 @@ export function NoteEditor({ initialNotes }: NoteEditorProps) {
 
     try {
       const response = await fetch(endpoint, {
+        signal: ac.signal,
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title, body }),
       });
       const data = (await response.json().catch(() => null)) as { note?: Note; error?: string } | null;
+
+      if (ac.signal.aborted) return;
 
       if (!response.ok || !data?.note) {
         setSaveState('error');
@@ -74,14 +138,15 @@ export function NoteEditor({ initialNotes }: NoteEditorProps) {
       setSaveState('saved');
       setMessage(`Saved ${formatSavedAt(data.note.updatedAt)}`);
       router.refresh();
-    } catch {
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       setSaveState('error');
       setMessage('Network failure. Check your connection and try again.');
     }
   }
 
   function startNewNote() {
-    setSelectedId('new');
+    trySelectNote('new');
   }
 
   return (
@@ -91,7 +156,11 @@ export function NoteEditor({ initialNotes }: NoteEditorProps) {
           New note
         </button>
         {notes.length === 0 ? (
-          <p className="muted">No notes yet.</p>
+          <div className="empty-state">
+            <p className="empty-state-text">
+              No notes yet — create your first note to get started.
+            </p>
+          </div>
         ) : (
           <ul>
             {notes.map((note) => (
@@ -99,7 +168,7 @@ export function NoteEditor({ initialNotes }: NoteEditorProps) {
                 <button
                   type="button"
                   className={note.id === selectedId ? 'note-list-item active' : 'note-list-item'}
-                  onClick={() => setSelectedId(note.id)}
+                  onClick={() => trySelectNote(note.id)}
                   aria-current={note.id === selectedId ? 'true' : undefined}
                 >
                   <strong>{note.title}</strong>
@@ -111,45 +180,65 @@ export function NoteEditor({ initialNotes }: NoteEditorProps) {
         )}
       </aside>
 
-      <form className="note-form" onSubmit={saveNote}>
-        <label>
-          Title
-          <input
-            name="title"
-            value={title}
-            onChange={(event) => {
-              setTitle(event.target.value);
-              setSaveState('idle');
-              setMessage('Unsaved changes');
-            }}
-            maxLength={200}
-            required
-          />
-        </label>
-
-        <label>
-          Body
-          <textarea
-            name="body"
-            value={body}
-            onChange={(event) => {
-              setBody(event.target.value);
-              setSaveState('idle');
-              setMessage('Unsaved changes');
-            }}
-            rows={14}
-          />
-        </label>
-
-        <div className="note-actions">
-          <button type="submit" disabled={saveState === 'saving'}>
-            {saveState === 'saving' ? 'Saving…' : selectedNote ? 'Save changes' : 'Create note'}
-          </button>
-          <p role={saveState === 'error' ? 'alert' : 'status'} className={`save-state ${saveState}`}>
-            {message}
+      {pendingDiscardTarget ? (
+        <div className="discard-dialog" role="alertdialog" aria-labelledby="discard-heading">
+          <p id="discard-heading" className="discard-heading">
+            Discard unsaved changes?
           </p>
+          <p className="discard-message">
+            Switching notes will discard your unsaved edits.
+          </p>
+          <div className="discard-actions">
+            <button type="button" className="secondary-button" onClick={cancelDiscard}>
+              Keep editing
+            </button>
+            <button type="button" className="destructive-button" onClick={confirmDiscard}>
+              Discard
+            </button>
+          </div>
         </div>
-      </form>
+      ) : (
+        <form className="note-form" onSubmit={saveNote}>
+          <label>
+            Title
+            <input
+              name="title"
+              value={title}
+              onChange={(event) => {
+                setTitle(event.target.value);
+                setSaveState('idle');
+                setMessage('Unsaved changes');
+              }}
+              maxLength={200}
+              required
+            />
+          </label>
+
+          <label>
+            Body
+            <textarea
+              name="body"
+              value={body}
+              onChange={(event) => {
+                setBody(event.target.value);
+                setSaveState('idle');
+                setMessage('Unsaved changes');
+              }}
+              rows={14}
+            />
+          </label>
+
+          <div className="note-actions">
+            {isDirty && <span className="dirty-indicator">Unsaved changes</span>}
+            <button type="submit" disabled={saveState === 'saving'}>
+              {saveState === 'saving' ? 'Saving…' : selectedNote ? 'Save changes' : 'Create note'}
+            </button>
+            <p role={saveState === 'error' ? 'alert' : 'status'} className={`save-state ${saveState}`}>
+              {message}
+            </p>
+          </div>
+        </form>
+      )}
     </div>
   );
 }
