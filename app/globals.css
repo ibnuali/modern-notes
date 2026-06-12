@@ -158,9 +158,14 @@ main {
 .empty-state {
   border: 1px dashed var(--border);
   border-radius: 1rem;
-  color: var(--muted);
   margin-top: 2rem;
   padding: 2rem;
+  text-align: center;
+}
+
+.empty-state-text {
+  color: var(--muted);
+  margin: 0;
 }
 
 .notes-grid {
@@ -254,6 +259,46 @@ main {
 
 .save-state.saved {
   color: #15803d;
+}
+
+.dirty-indicator {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.discard-dialog {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  display: grid;
+  gap: 0.75rem;
+  padding: 2rem;
+  place-content: center;
+  text-align: center;
+}
+
+.discard-heading {
+  font-weight: 800;
+  margin: 0;
+}
+
+.discard-message {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.discard-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+
+.destructive-button {
+  background: var(--error);
+  color: #ffffff;
 }
 
 @media (max-width: 720px) {
