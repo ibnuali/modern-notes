@@ -236,11 +236,11 @@ describe('NoteEditor', () => {
 
       // note is at index 0, so it's selected by default
       const activeItem = screen.getByText('Existing note').closest('button');
-      expect(activeItem).toHaveAttribute('aria-current', 'true');
+      expect(activeItem).toHaveAttribute('aria-selected', 'true');
 
       // Second note is not active
       const inactiveItem = screen.getByText('Second note').closest('button');
-      expect(inactiveItem).not.toHaveAttribute('aria-current');
+      expect(inactiveItem).toHaveAttribute('aria-selected', 'false');
     });
 
     it('switches highlight when selecting another note', async () => {
@@ -250,9 +250,9 @@ describe('NoteEditor', () => {
       await user.click(screen.getByText('Second note'));
 
       const activeItem = screen.getByText('Second note').closest('button');
-      expect(activeItem).toHaveAttribute('aria-current', 'true');
+      expect(activeItem).toHaveAttribute('aria-selected', 'true');
       const inactiveItem = screen.getByText('Existing note').closest('button');
-      expect(inactiveItem).not.toHaveAttribute('aria-current');
+      expect(inactiveItem).toHaveAttribute('aria-selected', 'false');
     });
   });
 });

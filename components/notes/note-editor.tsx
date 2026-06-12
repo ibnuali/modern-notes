@@ -36,6 +36,7 @@ export function NoteEditor({ initialNotes }: NoteEditorProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Note[] | null>(null);
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchAbortRef = useRef<AbortController | null>(null);
 
@@ -51,6 +52,16 @@ export function NoteEditor({ initialNotes }: NoteEditorProps) {
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [message, setMessage] = useState('Unsaved note');
   const [pendingDiscardTarget, setPendingDiscardTarget] = useState<string | null>(null);
+
+  // Dismiss discard dialog on Escape
+  useEffect(() => {
+    if (!pendingDiscardTarget) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setPendingDiscardTarget(null);
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [pendingDiscardTarget]);
 
   const isDirty = useMemo(
     () => !editorStateMatchesNote(title, body, selectedNote),
@@ -87,10 +98,12 @@ export function NoteEditor({ initialNotes }: NoteEditorProps) {
     if (!trimmed) {
       setSearchResults(null);
       setSearching(false);
+      setSearchError(null);
       return;
     }
 
     setSearching(true);
+    setSearchError(null);
 
     let ignore = false;
 
@@ -111,10 +124,14 @@ export function NoteEditor({ initialNotes }: NoteEditorProps) {
         } else {
           setSearchResults(data.notes as Note[]);
         }
+
+        // Clear any previous search error on success
+        setSearchError(null);
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return;
         if (ignore) return;
         setSearchResults([]);
+        setSearchError('Search failed. Check your connection and try again.');
       } finally {
         if (!ignore) setSearching(false);
       }
@@ -216,6 +233,20 @@ export function NoteEditor({ initialNotes }: NoteEditorProps) {
     trySelectNote('new');
   }
 
+  function handleListKeyDown(e: React.KeyboardEvent) {
+    if (visibleNotes.length === 0) return;
+    const currentIndex = visibleNotes.findIndex((note) => note.id === selectedId);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      const nextIndex = currentIndex < visibleNotes.length - 1 ? currentIndex + 1 : 0;
+      trySelectNote(visibleNotes[nextIndex].id);
+    } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const prevIndex = currentIndex > 0 ? currentIndex - 1 : visibleNotes.length - 1;
+      trySelectNote(visibleNotes[prevIndex].id);
+    }
+  }
+
   return (
     <div className="notes-grid">
       <aside className="notes-list" aria-label="Saved notes">
@@ -234,6 +265,11 @@ export function NoteEditor({ initialNotes }: NoteEditorProps) {
             />
             {searching && <span className="search-spinner" aria-label="Searching" />}
           </div>
+          {searchError && (
+            <p role="alert" className="form-error">
+              {searchError}
+            </p>
+          )}
         </div>
 
         {notes.length === 0 ? (
@@ -249,14 +285,17 @@ export function NoteEditor({ initialNotes }: NoteEditorProps) {
             </p>
           </div>
         ) : (
-          <ul>
-            {visibleNotes.map((note) => (
-              <li key={note.id}>
+          <ul role="listbox" aria-label="Notes list" onKeyDown={handleListKeyDown}>
+            {visibleNotes.map((note, idx) => (
+              <li key={note.id} role="presentation">
                 <button
                   type="button"
+                  role="option"
+                  aria-selected={note.id === selectedId}
+                  aria-posinset={idx + 1}
+                  aria-setsize={visibleNotes.length}
                   className={note.id === selectedId ? 'note-list-item active' : 'note-list-item'}
                   onClick={() => trySelectNote(note.id)}
-                  aria-current={note.id === selectedId ? 'true' : undefined}
                 >
                   <strong>{note.title}</strong>
                   <span>{formatSavedAt(note.updatedAt)}</span>
@@ -317,7 +356,7 @@ export function NoteEditor({ initialNotes }: NoteEditorProps) {
 
           <div className="note-actions">
             {isDirty && <span className="dirty-indicator">Unsaved changes</span>}
-            <button type="submit" disabled={saveState === 'saving'}>
+            <button type="submit" disabled={saveState === 'saving'} aria-busy={saveState === 'saving'}>
               {saveState === 'saving' ? 'Saving…' : selectedNote ? 'Save changes' : 'Create note'}
             </button>
             <p role={saveState === 'error' ? 'alert' : 'status'} className={`save-state ${saveState}`}>

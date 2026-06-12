@@ -72,12 +72,12 @@ export function AuthForm({ mode }: AuthFormProps) {
       </label>
 
       {error ? (
-        <p role="alert" className="form-error">
+        <p role="alert" id="auth-error" className="form-error">
           {error}
         </p>
       ) : null}
 
-      <button type="submit" disabled={isSubmitting}>
+      <button type="submit" disabled={isSubmitting} aria-busy={isSubmitting} aria-describedby={error ? 'auth-error' : undefined}>
         {isSubmitting ? 'Please wait…' : isRegister ? 'Create account' : 'Log in'}
       </button>
     </form>
