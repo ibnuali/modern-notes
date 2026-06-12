@@ -48,6 +48,46 @@ export async function createNote(userId: string, input: unknown): Promise<NoteRe
   }
 }
 
+export async function searchNotes(
+  userId: string,
+  query: string,
+): Promise<
+  | {
+      ok: true;
+      notes: Array<{
+        id: string;
+        title: string;
+        body: string;
+        updatedAt: Date;
+        createdAt: Date;
+      }>;
+    }
+  | { ok: false; error: string; status: number }
+> {
+  try {
+    const trimmed = query.trim();
+
+    const notes = await db.note.findMany({
+      where: {
+        userId,
+        ...(trimmed
+          ? {
+              OR: [
+                { title: { contains: trimmed, mode: 'insensitive' } },
+                { body: { contains: trimmed, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    return { ok: true, notes };
+  } catch {
+    return { ok: false, error: 'Unable to search notes. Please try again.', status: 500 };
+  }
+}
+
 export async function updateNote(userId: string, noteId: string, input: unknown): Promise<NoteResult> {
   const parsed = noteSchema.safeParse(input);
 
