@@ -10,3 +10,7 @@ npm-debug.log*
 .claude/
 .multica/
 CLAUDE.md
+
+# E2E test artifacts
+e2e-report/
+test-results/
