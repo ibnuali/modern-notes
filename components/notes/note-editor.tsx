@@ -17,11 +17,13 @@ type NoteEditorProps = {
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
+const DATE_FMT = new Intl.DateTimeFormat(undefined, {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+});
+
 function formatSavedAt(value: string | Date) {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
+  return DATE_FMT.format(new Date(value));
 }
 
 function editorStateMatchesNote(title: string, body: string, note: Note | null): boolean {
@@ -285,15 +287,12 @@ export function NoteEditor({ initialNotes }: NoteEditorProps) {
             </p>
           </div>
         ) : (
-          <ul role="listbox" aria-label="Notes list" onKeyDown={handleListKeyDown}>
-            {visibleNotes.map((note, idx) => (
-              <li key={note.id} role="presentation">
+          <ul aria-label="Notes list" onKeyDown={handleListKeyDown}>
+            {visibleNotes.map((note) => (
+              <li key={note.id}>
                 <button
                   type="button"
-                  role="option"
-                  aria-selected={note.id === selectedId}
-                  aria-posinset={idx + 1}
-                  aria-setsize={visibleNotes.length}
+                  aria-current={note.id === selectedId ? 'true' : undefined}
                   className={note.id === selectedId ? 'note-list-item active' : 'note-list-item'}
                   onClick={() => trySelectNote(note.id)}
                 >

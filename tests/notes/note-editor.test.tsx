@@ -236,11 +236,11 @@ describe('NoteEditor', () => {
 
       // note is at index 0, so it's selected by default
       const activeItem = screen.getByText('Existing note').closest('button');
-      expect(activeItem).toHaveAttribute('aria-selected', 'true');
+      expect(activeItem).toHaveAttribute('aria-current', 'true');
 
       // Second note is not active
       const inactiveItem = screen.getByText('Second note').closest('button');
-      expect(inactiveItem).toHaveAttribute('aria-selected', 'false');
+      expect(inactiveItem).not.toHaveAttribute('aria-current');
     });
 
     it('switches highlight when selecting another note', async () => {
@@ -250,9 +250,103 @@ describe('NoteEditor', () => {
       await user.click(screen.getByText('Second note'));
 
       const activeItem = screen.getByText('Second note').closest('button');
-      expect(activeItem).toHaveAttribute('aria-selected', 'true');
+      expect(activeItem).toHaveAttribute('aria-current', 'true');
       const inactiveItem = screen.getByText('Existing note').closest('button');
-      expect(inactiveItem).toHaveAttribute('aria-selected', 'false');
+      expect(inactiveItem).not.toHaveAttribute('aria-current');
+    });
+  });
+
+  describe('search', () => {
+    async function waitForDebounce() {
+      // The search effect debounces by 300ms; wait for it to fire and settle
+      await new Promise((r) => setTimeout(r, 350));
+    }
+
+    async function mockFetchOnce(result: object) {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => result,
+        }),
+      );
+    }
+
+    beforeEach(() => {
+      // Default: fetch returns empty results so nothing unexpectedly matches
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({ notes: [] }),
+        }),
+      );
+    });
+
+    it('sends debounced search request', async () => {
+      const user = userEvent.setup();
+      render(<NoteEditor initialNotes={[note, note2]} />);
+
+      await user.type(screen.getByLabelText('Search notes by title or body'), 'search-term');
+      await waitForDebounce();
+
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/notes/search?q=search-term',
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
+    });
+
+    it('displays search results in note list', async () => {
+      const user = userEvent.setup();
+      await mockFetchOnce({
+        notes: [{ ...note, id: 's1', title: 'Matching note' }],
+      });
+      render(<NoteEditor initialNotes={[note, note2]} />);
+
+      await user.type(screen.getByLabelText('Search notes by title or body'), 'match');
+      expect(await screen.findByText('Matching note')).toBeInTheDocument();
+      expect(screen.queryByText('Existing note')).not.toBeInTheDocument();
+    });
+
+    it('shows empty-state message when no results match', async () => {
+      const user = userEvent.setup();
+      render(<NoteEditor initialNotes={[note, note2]} />);
+
+      await user.type(screen.getByLabelText('Search notes by title or body'), 'zzz');
+      expect(await screen.findByText(/No notes match/)).toBeInTheDocument();
+    });
+
+    it('shows error message on network failure', async () => {
+      const user = userEvent.setup();
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockRejectedValue(new Error('offline')),
+      );
+      render(<NoteEditor initialNotes={[note, note2]} />);
+
+      await user.type(screen.getByLabelText('Search notes by title or body'), 'fail');
+      expect(await screen.findByRole('alert')).toHaveTextContent('Search failed');
+    });
+
+    it('restores original list when clearing search', async () => {
+      const user = userEvent.setup();
+      await mockFetchOnce({
+        notes: [{ ...note, id: 's1', title: 'Only match' }],
+      });
+      render(<NoteEditor initialNotes={[note, note2]} />);
+
+      // Type a search and wait for results
+      const input = screen.getByLabelText<HTMLInputElement>('Search notes by title or body');
+      await user.type(input, 'match');
+      expect(await screen.findByText('Only match')).toBeInTheDocument();
+
+      // Clear the input
+      await user.clear(input);
+      await waitForDebounce();
+
+      // Original notes should be restored
+      expect(screen.getByText('Existing note')).toBeInTheDocument();
+      expect(screen.getByText('Second note')).toBeInTheDocument();
     });
   });
 });

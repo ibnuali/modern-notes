@@ -8,6 +8,7 @@
   --accent: #2563eb;
   --accent-foreground: #ffffff;
   --error: #b91c1c;
+  --success: #15803d;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -20,6 +21,7 @@
     --accent: #60a5fa;
     --accent-foreground: #020617;
     --error: #fca5a5;
+    --success: #4ade80;
   }
 }
 
@@ -325,7 +327,7 @@ main {
 }
 
 .save-state.saved {
-  color: #15803d;
+  color: var(--success);
 }
 
 .dirty-indicator {
